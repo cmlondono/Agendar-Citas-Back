@@ -1,0 +1,178 @@
+-- Script de creación de tablas para AgendarCitas
+-- PostgreSQL
+
+-- Eliminar tablas si existen (en orden correcto por dependencias)
+DROP TABLE IF EXISTS recordatorio CASCADE;
+DROP TABLE IF EXISTS cita CASCADE;
+DROP TABLE IF EXISTS horario_laboral CASCADE;
+DROP TABLE IF EXISTS dia_especial CASCADE;
+DROP TABLE IF EXISTS servicio CASCADE;
+DROP TABLE IF EXISTS empleado CASCADE;
+DROP TABLE IF EXISTS administrador CASCADE;
+DROP TABLE IF EXISTS configuracion CASCADE;
+
+-- Tabla de administradores (solo para login)
+CREATE TABLE administrador (
+    id SERIAL PRIMARY KEY,
+    usuario VARCHAR(50) UNIQUE NOT NULL,
+    contraseña VARCHAR(100) NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de empleados
+CREATE TABLE empleado (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    activo BOOLEAN DEFAULT true,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de servicios
+CREATE TABLE servicio (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    duracion_minutos INTEGER NOT NULL,
+    costo DECIMAL(10,2) NOT NULL,
+    activo BOOLEAN DEFAULT true,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de horarios laborales
+CREATE TABLE horario_laboral (
+    id SERIAL PRIMARY KEY,
+    empleado_id INTEGER NOT NULL REFERENCES empleado(id) ON DELETE CASCADE,
+    dia_semana INTEGER NOT NULL CHECK (dia_semana BETWEEN 1 AND 7), -- 1=Lunes, 2=Martes, ..., 7=Domingo
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    activo BOOLEAN DEFAULT true,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla para días especiales (festivos, vacaciones)
+CREATE TABLE dia_especial (
+    id SERIAL PRIMARY KEY,
+    empleado_id INTEGER NOT NULL REFERENCES empleado(id) ON DELETE CASCADE,
+    fecha DATE NOT NULL,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('festivo', 'vacaciones', 'permiso', 'enfermedad')),
+    descripcion VARCHAR(200),
+    todo_el_dia BOOLEAN DEFAULT true,
+    hora_inicio TIME,
+    hora_fin TIME,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de citas
+CREATE TABLE cita (
+    id SERIAL PRIMARY KEY,
+    cliente_nombre VARCHAR(100) NOT NULL,
+    cliente_celular VARCHAR(20) NOT NULL,
+    empleado_id INTEGER NOT NULL REFERENCES empleado(id),
+    servicio_id INTEGER NOT NULL REFERENCES servicio(id),
+    fecha_hora_inicio TIMESTAMP NOT NULL,
+    fecha_hora_fin TIMESTAMP NOT NULL,
+    estado VARCHAR(20) DEFAULT 'programada' CHECK (estado IN ('programada', 'cumplida', 'cancelada', 'no_presento')),
+    costo_total DECIMAL(10,2) NOT NULL,
+    notas TEXT,
+    recordatorio_enviado BOOLEAN DEFAULT false,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de recordatorios activos (opcional - para persistencia)
+CREATE TABLE recordatorio (
+    id SERIAL PRIMARY KEY,
+    cita_id INTEGER NOT NULL REFERENCES cita(id) ON DELETE CASCADE,
+    fecha_hora_recordatorio TIMESTAMP NOT NULL,
+    mensaje TEXT,
+    visto BOOLEAN DEFAULT false,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Configuración del sistema
+CREATE TABLE configuracion (
+    id SERIAL PRIMARY KEY,
+    clave VARCHAR(50) UNIQUE NOT NULL,
+    valor VARCHAR(100) NOT NULL,
+    descripcion VARCHAR(200),
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índices para mejorar rendimiento
+CREATE INDEX idx_cita_empleado_fecha ON cita(empleado_id, fecha_hora_inicio);
+CREATE INDEX idx_cita_estado_fecha ON cita(estado, fecha_hora_inicio);
+CREATE INDEX idx_cita_recordatorio ON cita(recordatorio_enviado, fecha_hora_inicio);
+CREATE INDEX idx_horario_empleado_dia ON horario_laboral(empleado_id, dia_semana);
+CREATE INDEX idx_dia_especial_empleado_fecha ON dia_especial(empleado_id, fecha);
+
+-- Función para actualizar fecha_actualizacion automáticamente
+CREATE OR REPLACE FUNCTION actualizar_fecha_actualizacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.fecha_actualizacion = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers para actualizar fecha_actualizacion
+CREATE TRIGGER trigger_actualizar_cita
+    BEFORE UPDATE ON cita
+    FOR EACH ROW
+    EXECUTE FUNCTION actualizar_fecha_actualizacion();
+
+CREATE TRIGGER trigger_actualizar_configuracion
+    BEFORE UPDATE ON configuracion
+    FOR EACH ROW
+    EXECUTE FUNCTION actualizar_fecha_actualizacion();
+
+-- Vista para reportes de citas
+CREATE VIEW vista_reportes_citas AS
+SELECT
+    c.id,
+    c.cliente_nombre,
+    c.cliente_celular,
+    e.nombre as empleado_nombre,
+    s.nombre as servicio_nombre,
+    s.duracion_minutos,
+    c.fecha_hora_inicio,
+    c.fecha_hora_fin,
+    c.estado,
+    c.costo_total,
+    c.fecha_creacion
+FROM cita c
+JOIN empleado e ON c.empleado_id = e.id
+JOIN servicio s ON c.servicio_id = s.id;
+
+-- Vista para disponibilidad de empleados
+CREATE VIEW vista_disponibilidad_empleados AS
+SELECT
+    e.id as empleado_id,
+    e.nombre as empleado_nombre,
+    hl.dia_semana,
+    hl.hora_inicio,
+    hl.hora_fin,
+    de.fecha as dia_no_laboral,
+    de.tipo as tipo_dia_especial
+FROM empleado e
+LEFT JOIN horario_laboral hl ON e.id = hl.empleado_id AND hl.activo = true
+LEFT JOIN dia_especial de ON e.id = de.empleado_id AND de.todo_el_dia = true;
+
+-- Comentarios descriptivos para las tablas
+COMMENT ON TABLE administrador IS 'Tabla de usuarios administradores del sistema';
+COMMENT ON TABLE empleado IS 'Tabla de empleados del salón de belleza';
+COMMENT ON TABLE servicio IS 'Tabla de servicios ofrecidos por el salón';
+COMMENT ON TABLE horario_laboral IS 'Horarios laborales de cada empleado';
+COMMENT ON TABLE dia_especial IS 'Días especiales como festivos, vacaciones y permisos';
+COMMENT ON TABLE cita IS 'Citas programadas de los clientes';
+COMMENT ON TABLE recordatorio IS 'Recordatorios de citas para clientes';
+COMMENT ON TABLE configuracion IS 'Configuración del sistema y parámetros';
+
+-- Mensaje de confirmación
+DO $$
+BEGIN
+    RAISE NOTICE 'Base de datos AgendarCitas creada exitosamente!';
+    RAISE NOTICE 'Tablas creadas: administrador, empleado, servicio, horario_laboral, dia_especial, cita, recordatorio, configuracion';
+    RAISE NOTICE 'Índices, vistas y triggers creados correctamente';
+END $$;
