@@ -18,6 +18,10 @@ public class CitaRequest {
      */
     private String clienteNombre;
 
+
+
+    private String clienteDocumento;
+
     /**
      * Número de teléfono del cliente para contactos y recordatorios
      * Campo requerido para comunicación con el cliente
@@ -73,6 +77,7 @@ public class CitaRequest {
     public CitaRequest(String clienteNombre, String clienteCelular, Long empleadoId,
                        Long servicioId, LocalDateTime fechaHoraInicio, String estado) {
         this.clienteNombre = clienteNombre;
+        this.clienteDocumento = clienteDocumento;
         this.clienteCelular = clienteCelular;
         this.empleadoId = empleadoId;
         this.servicioId = servicioId;
@@ -95,6 +100,11 @@ public class CitaRequest {
      * @param clienteNombre Nombre completo del cliente
      */
     public void setClienteNombre(String clienteNombre) { this.clienteNombre = clienteNombre; }
+
+
+
+    public String getClienteDocumento() { return clienteDocumento; } // NUEVO GETTER
+    public void setClienteDocumento(String clienteDocumento) { this.clienteDocumento = clienteDocumento; } // NUEVO SETTER
 
     /**
      * Obtiene el número de teléfono del cliente
