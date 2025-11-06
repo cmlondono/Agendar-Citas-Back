@@ -76,6 +76,11 @@ public class CitaService {
             throw new RuntimeException("La fecha y hora de inicio no pueden ser nulas");
         }
 
+        //  Validar que el documento del cliente no sea nulo o vacío
+        if (citaRequest.getClienteDocumento() == null || citaRequest.getClienteDocumento().trim().isEmpty()) {
+            throw new RuntimeException("El documento del cliente es obligatorio");
+        }
+
         // 2. Validar que el empleado existe
         Empleado empleado = empleadoRepository.findById(citaRequest.getEmpleadoId())
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con id: " + citaRequest.getEmpleadoId()));
@@ -101,6 +106,7 @@ public class CitaService {
         // 7. Crear y guardar la cita
         Cita cita = new Cita();
         cita.setClienteNombre(citaRequest.getClienteNombre());
+        cita.setClienteDocumento(citaRequest.getClienteDocumento());
         cita.setClienteCelular(citaRequest.getClienteCelular());
         cita.setEmpleado(empleado);
         cita.setServicio(servicio);

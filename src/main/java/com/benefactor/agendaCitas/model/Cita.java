@@ -15,6 +15,9 @@ public class Cita {
     @Column(name = "cliente_nombre", nullable = false, length = 100)
     private String clienteNombre;
 
+    @Column(name = "cliente_documento", nullable = false, length = 20)
+    private String clienteDocumento;
+
     @Column(name = "cliente_celular", nullable = false, length = 20)
     private String clienteCelular;
 
@@ -50,6 +53,7 @@ public class Cita {
     public Cita(String clienteNombre, String clienteCelular, Empleado empleado,
                 Servicio servicio, LocalDateTime fechaHoraInicio) {
         this.clienteNombre = clienteNombre;
+        this.clienteDocumento = clienteDocumento;
         this.clienteCelular = clienteCelular;
         this.empleado = empleado;
         this.servicio = servicio;
@@ -64,6 +68,14 @@ public class Cita {
 
     public String getClienteNombre() { return clienteNombre; }
     public void setClienteNombre(String clienteNombre) { this.clienteNombre = clienteNombre; }
+
+    public String getClienteDocumento() {
+        return clienteDocumento;
+    }
+
+    public void setClienteDocumento(String clienteDocumento) {
+        this.clienteDocumento = clienteDocumento;
+    }
 
     public String getClienteCelular() { return clienteCelular; }
     public void setClienteCelular(String clienteCelular) { this.clienteCelular = clienteCelular; }

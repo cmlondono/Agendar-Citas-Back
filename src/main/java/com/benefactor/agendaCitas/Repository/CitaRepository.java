@@ -17,6 +17,14 @@ import java.util.List;
 @Repository
 public interface CitaRepository extends JpaRepository<Cita, Long> {
 
+
+
+        List<Cita> findByClienteDocumentoAndClienteCelularAndEstado(
+                String documento, String celular, String estado);
+
+        boolean existsByClienteDocumentoAndClienteCelularAndEstado(
+                String documento, String celular, String estado);
+
     /**
      * Encuentra todas las citas de un empleado específico dentro de un rango de fechas
      * Consulta derivada automática generada por Spring Data JPA basada en el nombre del método
