@@ -32,7 +32,8 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns( // Patrones de origen permitidos
                         "http://localhost:*",    // Localhost con cualquier puerto
                         "http://127.0.0.1:*",    // IPv4 local con cualquier puerto
-                        "http://0.0.0.0:*"       // Todas las interfaces con cualquier puerto
+                        "http://0.0.0.0:*" ,     // Todas las interfaces con cualquier puerto
+                        "https://citaspalisg.netlify.app"
                 )
                 .allowedMethods("*")              // Todos los métodos HTTP permitidos
                 .allowedHeaders("*")              // Todos los headers permitidos
@@ -55,7 +56,8 @@ public class CorsConfig implements WebMvcConfigurer {
         config.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:*",    // Localhost con cualquier puerto
                 "http://127.0.0.1:*",    // IPv4 local con cualquier puerto
-                "http://0.0.0.0:*"       // Todas las interfaces con cualquier puerto
+                "http://0.0.0.0:*",      // Todas las interfaces con cualquier puerto
+                "https://citaspalisg.netlify.app/"
         ));
 
         // Métodos HTTP permitidos
