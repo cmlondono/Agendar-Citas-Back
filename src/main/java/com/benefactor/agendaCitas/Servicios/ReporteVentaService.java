@@ -1,5 +1,5 @@
 package com.benefactor.agendaCitas.Servicios;
-
+import com.benefactor.agendaCitas.DTO.VentaDTO;
 import com.benefactor.agendaCitas.model.Venta;
 import com.benefactor.agendaCitas.Repository.VentaRepository;
 import com.benefactor.agendaCitas.Repository.DetalleVentaRepository;
@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ReporteVentaService {
@@ -31,17 +32,24 @@ public class ReporteVentaService {
         LocalDateTime fechaFin = fecha.atTime(LocalTime.MAX);
 
         List<Venta> ventas = ventaRepository.findVentasConfirmadasByFecha(fechaInicio, fechaFin);
-        BigDecimal totalIngresos = ventaRepository.findTotalVentasByFecha(fecha);
+
+        // Convertir a DTOs
+        List<VentaDTO> ventasDTO = ventas.stream()
+                .map(VentaDTO::new)
+                .collect(Collectors.toList());
+
+        BigDecimal totalIngresos = ventasDTO.stream()
+                .map(VentaDTO::getTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Map<String, Object> reporte = new HashMap<>();
         reporte.put("fecha", fecha);
-        reporte.put("totalVentas", ventas.size());
+        reporte.put("totalVentas", ventasDTO.size());
         reporte.put("totalIngresos", totalIngresos);
-        reporte.put("ventas", ventas);
+        reporte.put("detalle", ventasDTO); // Usar DTOs
 
         return reporte;
     }
-
     // Generar reporte de ventas por mes
     public Map<String, Object> generarReporteVentasMensuales(YearMonth yearMonth) {
         LocalDateTime fechaInicio = yearMonth.atDay(1).atStartOfDay();
@@ -50,16 +58,25 @@ public class ReporteVentaService {
         List<Venta> ventas = ventaRepository.findVentasConfirmadasByFecha(fechaInicio, fechaFin);
         List<Object[]> estadisticas = ventaRepository.findEstadisticasVentasPorMes(fechaInicio, fechaFin);
 
-        // Calcular total manualmente por si hay problemas con la consulta
-        BigDecimal totalIngresos = ventas.stream()
-                .map(Venta::getTotal)
+        // Convertir a DTOs
+        List<VentaDTO> ventasDTO = ventas.stream()
+                .map(VentaDTO::new)
+                .collect(Collectors.toList());
+
+        BigDecimal totalIngresos = ventasDTO.stream()
+                .map(VentaDTO::getTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Calcular estadísticas adicionales desde los DTOs
+        Map<String, Long> ventasPorEstado = ventasDTO.stream()
+                .collect(Collectors.groupingBy(VentaDTO::getEstado, Collectors.counting()));
 
         Map<String, Object> reporte = new HashMap<>();
         reporte.put("mes", yearMonth);
-        reporte.put("totalVentas", ventas.size());
+        reporte.put("totalVentas", ventasDTO.size());
         reporte.put("totalIngresos", totalIngresos);
-        reporte.put("ventas", ventas);
+        reporte.put("ventasPorEstado", ventasPorEstado);
+        reporte.put("detalle", ventasDTO);
         reporte.put("estadisticas", procesarEstadisticasMensuales(estadisticas));
 
         return reporte;
@@ -67,22 +84,58 @@ public class ReporteVentaService {
 
     // Generar reporte de ventas por rango de fechas
     public Map<String, Object> generarReporteVentasPorRango(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
-        List<Venta> ventas = ventaRepository.findVentasConfirmadasByFecha(fechaInicio, fechaFin);
-        List<Object[]> productosMasVendidos = detalleVentaRepository.findProductosMasVendidos(fechaInicio, fechaFin);
+        try {
+            List<Venta> ventas = ventaRepository.findVentasConfirmadasByFecha(fechaInicio, fechaFin);
+            List<Object[]> productosMasVendidos = detalleVentaRepository.findProductosMasVendidos(fechaInicio, fechaFin);
 
-        BigDecimal totalIngresos = ventas.stream()
-                .map(Venta::getTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            // Convertir ventas a DTOs para evitar problemas de serialización
+            List<VentaDTO> ventasDTO = ventas.stream()
+                    .map(VentaDTO::new)
+                    .collect(Collectors.toList());
 
-        Map<String, Object> reporte = new HashMap<>();
-        reporte.put("fechaInicio", fechaInicio);
-        reporte.put("fechaFin", fechaFin);
-        reporte.put("totalVentas", ventas.size());
-        reporte.put("totalIngresos", totalIngresos);
-        reporte.put("ventas", ventas);
-        reporte.put("productosMasVendidos", procesarProductosMasVendidos(productosMasVendidos));
+            BigDecimal totalIngresos = ventasDTO.stream()
+                    .map(VentaDTO::getTotal)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return reporte;
+            // Calcular estadísticas por estado
+            Map<String, Long> ventasPorEstado = ventasDTO.stream()
+                    .collect(Collectors.groupingBy(VentaDTO::getEstado, Collectors.counting()));
+
+            // Calcular ingresos por día
+            Map<String, Map<String, Object>> ingresosPorDia = ventasDTO.stream()
+                    .collect(Collectors.groupingBy(
+                            v -> v.getFechaVenta().toLocalDate().toString(),
+                            Collectors.collectingAndThen(
+                                    Collectors.toList(),
+                                    list -> {
+                                        BigDecimal ingresosDia = list.stream()
+                                                .map(VentaDTO::getTotal)
+                                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                                        return Map.of(
+                                                "ingresos", ingresosDia,
+                                                "ventas", list.size()
+                                        );
+                                    }
+                            )
+                    ));
+
+            Map<String, Object> reporte = new HashMap<>();
+            reporte.put("fechaInicio", fechaInicio);
+            reporte.put("fechaFin", fechaFin);
+            reporte.put("totalVentas", ventasDTO.size());
+            reporte.put("totalIngresos", totalIngresos);
+            reporte.put("ventasPorEstado", ventasPorEstado);
+            reporte.put("ingresosPorDia", ingresosPorDia);
+            reporte.put("detalle", ventasDTO); // Usar DTOs en lugar de entidades
+            reporte.put("productosMasVendidos", procesarProductosMasVendidos(productosMasVendidos));
+
+            return reporte;
+
+        } catch (Exception e) {
+            System.err.println("❌ Error en generarReporteVentasPorRango: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Error generando reporte: " + e.getMessage(), e);
+        }
     }
 
     // Procesar estadísticas mensuales - CORREGIDO
